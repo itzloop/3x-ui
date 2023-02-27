@@ -7,7 +7,7 @@ import (
 
 type CheckInboundJob struct {
 	xrayService    service.XrayService
-	inboundService service.InboundService
+	inboundService service.InboundServiceImpl
 }
 
 func NewCheckInboundJob() *CheckInboundJob {

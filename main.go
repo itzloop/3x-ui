@@ -120,7 +120,7 @@ func updateTgbotEnableSts(status bool) {
 	settingService := service.SettingService{}
 	currentTgSts, err := settingService.GetTgbotenabled()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("error in updating settings")
 		return
 	}
 	logger.Infof("current enabletgbot status[%v],need update to status[%v]", currentTgSts, status)

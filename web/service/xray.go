@@ -16,7 +16,7 @@ var isNeedXrayRestart atomic.Bool
 var result string
 
 type XrayService struct {
-	inboundService InboundService
+	inboundService InboundServiceImpl
 	settingService SettingService
 }
 
@@ -123,6 +123,7 @@ func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, 
 }
 
 func (s *XrayService) RestartXray(isForce bool) error {
+	return nil
 	lock.Lock()
 	defer lock.Unlock()
 	logger.Debug("restart xray, force:", isForce)

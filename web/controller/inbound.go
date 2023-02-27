@@ -13,12 +13,13 @@ import (
 )
 
 type InboundController struct {
-	inboundService service.InboundService
+	inboundService service.InboundServiceImpl
 	xrayService    service.XrayService
 }
 
 func NewInboundController(g *gin.RouterGroup) *InboundController {
 	a := &InboundController{}
+	global.SetInbounds(&a.inboundService)
 	a.initRouter(g)
 	a.startTask()
 	return a

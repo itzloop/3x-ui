@@ -3,6 +3,8 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
+	"strings"
 	"time"
 	"x-ui/database"
 	"x-ui/database/model"
@@ -13,20 +15,21 @@ import (
 	"gorm.io/gorm"
 )
 
-type InboundService struct {
+type InboundServiceImpl struct {
 }
 
-func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
+func (s *InboundServiceImpl) GetInbounds(userId int) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	err := db.Model(model.Inbound{}).Preload("ClientStats").Where("user_id = ?", userId).Find(&inbounds).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
+
 	return inbounds, nil
 }
 
-func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
+func (s *InboundServiceImpl) GetAllInbounds() ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	err := db.Model(model.Inbound{}).Preload("ClientStats").Find(&inbounds).Error
@@ -36,7 +39,7 @@ func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 	return inbounds, nil
 }
 
-func (s *InboundService) checkPortExist(port int, ignoreId int) (bool, error) {
+func (s *InboundServiceImpl) checkPortExist(port int, ignoreId int) (bool, error) {
 	db := database.GetDB()
 	db = db.Model(model.Inbound{}).Where("port = ?", port)
 	if ignoreId > 0 {
@@ -50,7 +53,7 @@ func (s *InboundService) checkPortExist(port int, ignoreId int) (bool, error) {
 	return count > 0, nil
 }
 
-func (s *InboundService) getClients(inbound *model.Inbound) ([]model.Client, error) {
+func (s *InboundServiceImpl) getClients(inbound *model.Inbound) ([]model.Client, error) {
 	settings := map[string][]model.Client{}
 	json.Unmarshal([]byte(inbound.Settings), &settings)
 	if settings == nil {
@@ -64,7 +67,7 @@ func (s *InboundService) getClients(inbound *model.Inbound) ([]model.Client, err
 	return clients, nil
 }
 
-func (s *InboundService) checkEmailsExist(emails map[string]bool, ignoreId int) (string, error) {
+func (s *InboundServiceImpl) checkEmailsExist(emails map[string]bool, ignoreId int) (string, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	db = db.Model(model.Inbound{}).Where("Protocol in ?", []model.Protocol{model.VMess, model.VLESS, model.Trojan})
@@ -91,7 +94,7 @@ func (s *InboundService) checkEmailsExist(emails map[string]bool, ignoreId int) 
 	return "", nil
 }
 
-func (s *InboundService) checkEmailExistForInbound(inbound *model.Inbound) (string, error) {
+func (s *InboundServiceImpl) checkEmailExistForInbound(inbound *model.Inbound) (string, error) {
 	clients, err := s.getClients(inbound)
 	if err != nil {
 		return "", err
@@ -108,7 +111,7 @@ func (s *InboundService) checkEmailExistForInbound(inbound *model.Inbound) (stri
 	return s.checkEmailsExist(emails, inbound.Id)
 }
 
-func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, error) {
+func (s *InboundServiceImpl) AddInbound(inbound *model.Inbound) (*model.Inbound, error) {
 	exist, err := s.checkPortExist(inbound.Port, 0)
 	if err != nil {
 		return inbound, err
@@ -134,7 +137,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, err
 	return inbound, err
 }
 
-func (s *InboundService) AddInbounds(inbounds []*model.Inbound) error {
+func (s *InboundServiceImpl) AddInbounds(inbounds []*model.Inbound) error {
 	for _, inbound := range inbounds {
 		exist, err := s.checkPortExist(inbound.Port, 0)
 		if err != nil {
@@ -157,6 +160,9 @@ func (s *InboundService) AddInbounds(inbounds []*model.Inbound) error {
 	}()
 
 	for _, inbound := range inbounds {
+		if strings.TrimSpace(inbound.Tag) == "" {
+			inbound.Tag = uuid.NewString()
+		}
 		err = tx.Save(inbound).Error
 		if err != nil {
 			return err
@@ -166,12 +172,12 @@ func (s *InboundService) AddInbounds(inbounds []*model.Inbound) error {
 	return nil
 }
 
-func (s *InboundService) DelInbound(id int) error {
+func (s *InboundServiceImpl) DelInbound(id int) error {
 	db := database.GetDB()
 	return db.Delete(model.Inbound{}, id).Error
 }
 
-func (s *InboundService) GetInbound(id int) (*model.Inbound, error) {
+func (s *InboundServiceImpl) GetInbound(id int) (*model.Inbound, error) {
 	db := database.GetDB()
 	inbound := &model.Inbound{}
 	err := db.Model(model.Inbound{}).First(inbound, id).Error
@@ -181,7 +187,7 @@ func (s *InboundService) GetInbound(id int) (*model.Inbound, error) {
 	return inbound, nil
 }
 
-func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, error) {
+func (s *InboundServiceImpl) UpdateInbound(inbound *model.Inbound) (*model.Inbound, error) {
 	exist, err := s.checkPortExist(inbound.Port, inbound.Id)
 	if err != nil {
 		return inbound, err
@@ -221,7 +227,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	return inbound, db.Save(oldInbound).Error
 }
 
-func (s *InboundService) AddTraffic(traffics []*xray.Traffic) (err error) {
+func (s *InboundServiceImpl) AddTraffic(traffics []*xray.Traffic) (err error) {
 	if len(traffics) == 0 {
 		return nil
 	}
@@ -248,7 +254,7 @@ func (s *InboundService) AddTraffic(traffics []*xray.Traffic) (err error) {
 	}
 	return
 }
-func (s *InboundService) AddClientTraffic(traffics []*xray.ClientTraffic) (err error) {
+func (s *InboundServiceImpl) AddClientTraffic(traffics []*xray.ClientTraffic) (err error) {
 	if len(traffics) == 0 {
 		return nil
 	}
@@ -316,7 +322,7 @@ func (s *InboundService) AddClientTraffic(traffics []*xray.ClientTraffic) (err e
 	return
 }
 
-func (s *InboundService) DisableInvalidInbounds() (int64, error) {
+func (s *InboundServiceImpl) DisableInvalidInbounds() (int64, error) {
 	db := database.GetDB()
 	now := time.Now().Unix() * 1000
 	result := db.Model(model.Inbound{}).
@@ -326,7 +332,7 @@ func (s *InboundService) DisableInvalidInbounds() (int64, error) {
 	count := result.RowsAffected
 	return count, err
 }
-func (s *InboundService) DisableInvalidClients() (int64, error) {
+func (s *InboundServiceImpl) DisableInvalidClients() (int64, error) {
 	db := database.GetDB()
 	now := time.Now().Unix() * 1000
 	result := db.Model(xray.ClientTraffic{}).
@@ -336,7 +342,7 @@ func (s *InboundService) DisableInvalidClients() (int64, error) {
 	count := result.RowsAffected
 	return count, err
 }
-func (s *InboundService) UpdateClientStat(inboundId int, inboundSettings string) error {
+func (s *InboundServiceImpl) UpdateClientStat(inboundId int, inboundSettings string) error {
 	db := database.GetDB()
 
 	// get settings clients
@@ -366,11 +372,11 @@ func (s *InboundService) UpdateClientStat(inboundId int, inboundSettings string)
 	}
 	return nil
 }
-func (s *InboundService) DelClientStat(tx *gorm.DB, email string) error {
+func (s *InboundServiceImpl) DelClientStat(tx *gorm.DB, email string) error {
 	return tx.Where("email = ?", email).Delete(xray.ClientTraffic{}).Error
 }
 
-func (s *InboundService) ResetClientTraffic(clientEmail string) error {
+func (s *InboundServiceImpl) ResetClientTraffic(clientEmail string) error {
 	db := database.GetDB()
 
 	result := db.Model(xray.ClientTraffic{}).
@@ -384,7 +390,7 @@ func (s *InboundService) ResetClientTraffic(clientEmail string) error {
 	}
 	return nil
 }
-func (s *InboundService) GetClientTrafficById(uuid string) (traffic *xray.ClientTraffic, err error) {
+func (s *InboundServiceImpl) GetClientTrafficById(uuid string) (traffic *xray.ClientTraffic, err error) {
 	db := database.GetDB()
 	inbound := &model.Inbound{}
 	traffic = &xray.ClientTraffic{}

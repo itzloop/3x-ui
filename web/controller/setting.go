@@ -53,7 +53,7 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		jsonMsg(c, I18n(c, "pages.setting.toasts.modifySetting"), err)
 		return
 	}
-	err = a.settingService.UpdateAllSetting(allSetting)
+	err = a.settingService.UpdateAllSetting(c, allSetting)
 	jsonMsg(c, I18n(c, "pages.setting.toasts.modifySetting"), err)
 }
 

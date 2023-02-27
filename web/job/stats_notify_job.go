@@ -22,7 +22,7 @@ const (
 type StatsNotifyJob struct {
 	enable         bool
 	xrayService    service.XrayService
-	inboundService service.InboundService
+	inboundService service.InboundServiceImpl
 	settingService service.SettingService
 }
 

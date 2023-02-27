@@ -2,8 +2,10 @@ package service
 
 import (
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,6 +17,8 @@ import (
 	"x-ui/util/random"
 	"x-ui/util/reflect_util"
 	"x-ui/web/entity"
+	"x-ui/web/global"
+	"x-ui/web/session"
 )
 
 //go:embed config.json
@@ -281,7 +285,7 @@ func (s *SettingService) GetTimeLocation() (*time.Location, error) {
 	return location, nil
 }
 
-func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
+func (s *SettingService) UpdateAllSetting(c *gin.Context, allSetting *entity.AllSetting) error {
 	if err := allSetting.CheckValid(); err != nil {
 		return err
 	}
@@ -294,10 +298,95 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 		key := field.Tag.Get("json")
 		fieldV := v.FieldByName(field.Name)
 		value := fmt.Sprint(fieldV.Interface())
+
+		if key == "xrayTemplateConfig" {
+			if err := s.handleInboundsFromConfig(c, value); err != nil {
+				return err
+			}
+		}
 		err := s.saveSetting(key, value)
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return common.Combine(errs...)
+}
+
+func (s *SettingService) handleInboundsFromConfig(c *gin.Context, value string) error {
+	// update inbounds :)
+	// get inbounds from value
+	configMap := map[string]interface{}{}
+	if err := json.Unmarshal([]byte(value), &configMap); err != nil {
+		return err
+	}
+
+	if _, ok := configMap["inbounds"]; !ok {
+		return nil
+	}
+
+	if _, ok := configMap["inbounds"].([]interface{}); !ok {
+		return nil
+	}
+
+	var inbounds []*model.Inbound
+	for _, inboundInr := range configMap["inbounds"].([]interface{}) {
+		inbound, ok := inboundInr.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		user := session.GetLoginUser(c)
+		var inboundStruct model.Inbound
+		inboundStruct.UserId = user.Id
+		up, _ := inbound["up"].(float64)
+		inboundStruct.Up = int64(up)
+		down, _ := inbound["down"].(float64)
+		inboundStruct.Down = int64(down)
+		total, _ := inbound["total"].(float64)
+		inboundStruct.Total = int64(total)
+		inboundStruct.Remark, _ = inbound["remark"].(string)
+		inboundStruct.Enable, _ = inbound["enable"].(bool)
+		expiryTime, _ := inbound["expiryTime"].(float64)
+		inboundStruct.ExpiryTime = int64(expiryTime)
+		inboundStruct.Listen, _ = inbound["listen"].(string)
+		port, _ := inbound["port"].(float64)
+		inboundStruct.Port = int(port)
+		pr, _ := inbound["protocol"].(string)
+		inboundStruct.Protocol = model.Protocol(pr)
+
+		j, _ := json.Marshal(inbound["settings"])
+		if string(j) == "null" {
+			continue
+		}
+		inboundStruct.Settings = string(j)
+
+		j, _ = json.Marshal(inbound["streamSettings"])
+		if string(j) == "null" {
+			continue
+		}
+		inboundStruct.StreamSettings = string(j)
+		inboundStruct.Tag, _ = inbound["tag"].(string)
+
+		j, _ = json.Marshal(inbound["sniffing"])
+		if string(j) == "null" {
+			continue
+		}
+		inboundStruct.Sniffing = string(j)
+
+		if inboundStruct.Port == 0 && strings.TrimSpace(inboundStruct.Remark) == "" {
+			inboundStruct.Remark = strings.ToLower(fmt.Sprintf("%s-fallback", inboundStruct.Tag))
+		} else if strings.TrimSpace(inboundStruct.Remark) == "" {
+			inboundStruct.Remark = strings.ToLower(inboundStruct.Tag)
+		}
+
+		inbounds = append(inbounds, &inboundStruct)
+	}
+
+	if err := global.GetInbounds().AddInbounds(inbounds); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "port") {
+			return err
+		}
+	}
+
+	return nil
 }

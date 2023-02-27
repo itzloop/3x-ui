@@ -39,7 +39,7 @@ func MigrateFromV2UI(dbPath string) error {
 		inbounds = append(inbounds, v2inbound.ToInbound(user.Id))
 	}
 
-	inboundService := service.InboundService{}
+	inboundService := service.InboundServiceImpl{}
 	err = inboundService.AddInbounds(inbounds)
 	if err != nil {
 		return common.NewError("add x-ui inbounds failed:", err)
